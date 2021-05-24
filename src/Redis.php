@@ -89,6 +89,32 @@ class Redis extends Base
     }
 
     /**
+     * 访问频率限制
+     * @param string $sign 标识
+     * @param int $time 单位时间s
+     * @param int $limit 限制次数
+     * @param string $prefix
+     * @return bool
+     */
+    public static function limitRequest(string $sign, $time = 5, $limit = 3, $prefix = 'limit_')
+    {
+        $key = $prefix . $sign;
+        $redis = self::getInstance();
+        if ($redis->exists($key)) {
+            list($lastTime, $count) = explode('|', $redis->get($key));
+        } else {
+            list($lastTime, $count) = [time(), $limit];
+        }
+
+        $count = (int)($limit / $time * (time() - $lastTime) + $count); //过去单位时间,补上对应次数
+        if ($count < 1) {
+            return false;
+        }
+        $count = min($count, $limit);
+        return $redis->setex($key, $time, time() . '|' . --$count);
+    }
+
+    /**
      * 生成锁KEY
      * @param string $sign
      * @param string $prefix

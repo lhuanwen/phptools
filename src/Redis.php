@@ -115,6 +115,46 @@ class Redis extends Base
     }
 
     /**
+     * 查询不同类型数据
+     * @param string $key
+     * @param int $isDel
+     * @return array
+     */
+    public static function optQuery($key, $isDel = 0)
+    {
+        $redis = self::getInstance();
+        if (!$redis->exists($key)) {
+            return [];
+        }
+        if ($isDel) {
+            return [$redis->del($key)];
+        }
+        $type = $redis->type($key);
+        switch ($type) {
+            case 1: //string
+                $content = $redis->get($key);
+                break;
+            case 2: //set
+                $content = ['total' => $redis->sCard($key), 'content' => $redis->sMembers($key)];
+                break;
+            case 3: //list
+                $content = ['total' => $redis->lLen($key), 'content' => $redis->lRange($key, 0, 99)];
+                break;
+            case 4: //zSet
+                $content = ['total' => $redis->zCard($key), 'content' => $redis->zRange($key, 0, 99, true)];
+                break;
+            case 5: //hash
+                $content = ['total' => $redis->hLen($key), 'content' => $redis->hGetAll($key)];
+                break;
+            default:
+                $content = '';
+                break;
+        }
+        $arr = [1 => 'string', 2 => 'set', 3 => 'list', 4 => 'zSet', 5 => 'hash'];
+        return ['type' => $arr[$type], 'ttl' => $redis->ttl($key), 'data' => $content];
+    }
+
+    /**
      * 生成锁KEY
      * @param string $sign
      * @param string $prefix

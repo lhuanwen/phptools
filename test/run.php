@@ -13,4 +13,4 @@ use phpTools\Base;
 use phpTools\Redis;
 
 Base::init([]);
-var_dump(Redis::getInstance()->setex('test', 60, 1));
+var_dump(Redis::getInstance()->getLock('lock:test'));

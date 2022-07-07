@@ -61,18 +61,15 @@ class Redis extends Base
     {
         $key = self::lockKey($sign, $prefix);
         $redis = self::getInstance();
-        $isLock = $redis->setnx($key, (time() + $expire));
+        $isLock = $redis->set($key, (time() + $expire), ['nx', 'ex' => $ttl > 0 ? $ttl : $expire]);
         // 不能获取锁
         if (!$isLock) {
             // 判断锁是否过期
             $lockTime = $redis->get($key);
             if (time() > $lockTime) {
                 self::redisUnLock($sign, $prefix);
-                $isLock = $redis->setnx($key, (time() + $expire));
+                $isLock = $redis->set($key, (time() + $expire), ['nx', 'ex' => $ttl > 0 ? $ttl : $expire]);
             }
-        }
-        if ($ttl > 0 && $isLock) {
-            $redis->expire($key, $ttl);
         }
         return $isLock ? true : false;
     }
@@ -173,6 +170,41 @@ class Redis extends Base
             throw new \Exception("Redis method {$method} doesn't exists");
         }
     }
+
+    /**
+     * 分布式-加锁
+     * @param string $key  锁的键名
+     * @param int $timeOut 锁过期时间
+     * @return bool|string 失败返回false
+     */
+    public function getLock(string $key, int $timeOut = 5)
+    {
+        $identifier = uniqid();
+        $end = time() + $timeOut;
+        while (time() < $end) {
+            if (self::getInstance()->set($key, $identifier, ['nx', 'ex' => $timeOut])) {
+                return $identifier;
+            }
+            sleep(1);
+        }
+        return false;
+    }
+
+    /**
+     * 分布式-释放锁
+     * @param string $key
+     * @param string $identifier
+     * @return bool
+     */
+    public function releaseLock(string $key, string $identifier)
+    {
+        if (self::getInstance()->get($key) == $identifier) {
+            self::getInstance()->watch($key);
+            return self::getInstance()->multi()->del($key)->exec();
+        }
+        return false;
+    }
+
 
     public function __clone()
     {
